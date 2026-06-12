@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ryu-vision</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="app">
+        <header>
+            <h1>👁️ ryu-vision</h1>
+            <p class="subtitle">Telegram Mini App</p>
+        </header>
+
+        <main>
+            <div id="status" class="card">
+                <p>Terhubung sebagai <strong id="user-name">—</strong></p>
+            </div>
+
+            <div class="card">
+                <button id="btn-action" class="btn-primary">📸 Ambil Gambar</button>
+            </div>
+
+            <div id="result" class="card hidden">
+                <h3>Hasil:</h3>
+                <pre id="result-text"></pre>
+            </div>
+        </main>
+
+        <footer>
+            <p>ryu-vision &copy; 2026</p>
+        </footer>
+    </div>
+    <script src="app.js"></script>
+</body>
+</html>

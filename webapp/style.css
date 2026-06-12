@@ -1,0 +1,91 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+:root {
+    --bg: var(--tg-theme-bg-color, #1a1a2e);
+    --text: var(--tg-theme-text-color, #e0e0e0);
+    --hint: var(--tg-theme-hint-color, #888);
+    --btn: var(--tg-theme-button-color, #4a90d9);
+    --btn-text: var(--tg-theme-button-text-color, #fff);
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 16px;
+}
+
+#app {
+    max-width: 480px;
+    margin: 0 auto;
+}
+
+header {
+    text-align: center;
+    padding: 24px 0;
+}
+
+header h1 {
+    font-size: 28px;
+    margin-bottom: 4px;
+}
+
+.subtitle {
+    color: var(--hint);
+    font-size: 14px;
+}
+
+.card {
+    background: rgba(255,255,255,0.05);
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 12px;
+}
+
+.btn-primary {
+    display: block;
+    width: 100%;
+    padding: 14px;
+    background: var(--btn);
+    color: var(--btn-text);
+    border: none;
+    border-radius: 10px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.2s;
+}
+
+.btn-primary:hover {
+    opacity: 0.9;
+}
+
+.btn-primary:active {
+    transform: scale(0.98);
+}
+
+.hidden {
+    display: none !important;
+}
+
+#result pre {
+    margin-top: 8px;
+    padding: 12px;
+    background: rgba(0,0,0,0.3);
+    border-radius: 8px;
+    font-size: 13px;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+footer {
+    text-align: center;
+    padding: 24px 0;
+    font-size: 12px;
+    color: var(--hint);
+}

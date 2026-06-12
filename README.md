@@ -1,27 +1,26 @@
 # ryu-vision 👁️
 
-**Computer vision toolkit for Hermes Agent — integrasi vision, webcam, deteksi objek, dan AI vision di Windows.**
+**Telegram Mini App — integrasi vision & AI dalam Telegram.**
 
-Proyek ini adalah turunan/setup dari teknologi WiFi sensing & computer vision yang dioptimalkan untuk ekosistem Hermes Agent di Windows. Terinspirasi dari [RuView](https://github.com/ruvnet/RuView) dan berbagai framework vision modern.
-
-## ✨ Fitur Utama
-
-- 🔍 **Object Detection** — YOLO, MediaPipe, COCO-SSD via Python
-- 📷 **Webcam Integration** — real-time capture & analysis via Hermes Agent
-- 📡 **WiFi Sensing (opsional)** — ESP32 CSI integration untuk deteksi kehadiran
-- 🧠 **AI Vision** — integrasi dengan OpenAI Vision, Anthropic Vision
-- 🪟 **Windows Optimized** — PowerShell wrapper, batch scripts, COM port management
+Proyek ini adalah **Telegram Mini App** (WebApp) yang menggabungkan:
+- 🤖 **Bot Telegram** — handler commands & interaksi
+- 🌐 **Mini App Web** — UI interaktif di dalam Telegram
+- 👁️ **Vision tools** — integrasi kamera, upload gambar, AI vision
 
 ## 📁 Struktur
 
 ```
 ryu-vision/
 ├── README.md
-├── scripts/          # PowerShell, batch, Python utilities
-├── models/           # Model weights & configs
-├── tools/            # Vision tools & utilities
-├── docs/             # Dokumentasi
-└── examples/         # Contoh penggunaan
+├── .gitignore
+├── bot/                # Kode bot Telegram (Python)
+│   ├── main.py
+│   └── requirements.txt
+├── webapp/             # Mini App frontend (HTML/JS)
+│   ├── index.html
+│   ├── app.js
+│   └── style.css
+└── tools/              # Utility tools
 ```
 
 ## 🚀 Quick Start
@@ -31,18 +30,18 @@ ryu-vision/
 git clone https://github.com/ryu-id/ryu-vision.git
 cd ryu-vision
 
-# Setup Python env
+# Setup bot
+cd bot
 python -m venv .venv
-.venv\Scripts\activate
+source .venv/bin/activate  # atau .venv\Scripts\activate (Windows)
 pip install -r requirements.txt
 ```
 
-## 📦 Dependencies
+## 🔧 Tech Stack
 
-- Python 3.10+
-- OpenCV
-- MediaPipe
-- Hermes Agent tools (opsional)
+- **Python** (aiogram / python-telegram-bot)
+- **Telegram WebApp API** (JS)
+- **Hermes Agent** (integrasi tools)
 
 ---
 

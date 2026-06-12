@@ -1,7 +1,6 @@
 # Python
 __pycache__/
 *.py[cod]
-*$py.class
 *.so
 .env
 .venv/
@@ -20,11 +19,10 @@ build/
 Thumbs.db
 .DS_Store
 
-# Models (large downloaded weights)
-models/*.pt
-models/*.onnx
-models/*.pth
-!models/.gitkeep
+# Node
+node_modules/
+package-lock.json
+yarn.lock
 
 # Temp
 *.tmp
