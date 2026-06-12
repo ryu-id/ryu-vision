@@ -49,6 +49,9 @@ def validate_init_data(init_data: str) -> bool:
     """Validasi Telegram WebApp init data"""
     if not init_data:
         return False
+    # Dev mode: bypass validasi untuk testing
+    if init_data.strip() == "dev_mode=1":
+        return True
     try:
         # Parse init data
         params = {}
@@ -331,11 +334,15 @@ async def handle_health(request: web.Request) -> web.Response:
 
 async def handle_webapp(request: web.Request) -> web.Response:
     """GET /webapp — serve webapp frontend"""
-    webapp_path = Path(__file__).parent.parent / "webapp" / "index.html"
-    if webapp_path.exists():
-        text = webapp_path.read_text(encoding="utf-8")
-        return web.Response(text=text, content_type="text/html; charset=utf-8")
-    return web.Response(text="Webapp not found", status=404)
+    try:
+        webapp_path = Path(__file__).parent.parent / "webapp" / "index.html"
+        if webapp_path.exists():
+            text = webapp_path.read_text(encoding="utf-8")
+            return web.Response(text=text, content_type="text/html", charset="utf-8")
+        return web.Response(text="Webapp not found", status=404)
+    except Exception as e:
+        logger.error(f"Webapp error: {e}")
+        return web.Response(text=f"Error: {e}", status=500)
 
 
 async def handle_webapp_static(request: web.Request) -> web.Response:
@@ -400,18 +407,35 @@ async def run_http_server():
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message):
     """Welcome + tombol buka File Explorer"""
-    builder = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(
-            text="📁 Buka File Explorer",
-            web_app=WebAppInfo(url=WEBAPP_URL)
-        )]
-    ])
-    await message.answer(
+    is_https = WEBAPP_URL.startswith("https://")
+    
+    if is_https:
+        builder = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(
+                text="📁 Buka File Explorer",
+                web_app=WebAppInfo(url=WEBAPP_URL)
+            )]
+        ])
+    else:
+        builder = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(
+                text="🔧 Setup Tunnel Dulu",
+                url="https://ngrok.com/download"
+            )]
+        ])
+    
+    msg = (
         "👁️ **ryu-vision — File Explorer**\n\n"
-        "Jelajahi file Windows langsung dari Telegram!\n\n"
-        "Klik tombol di bawah untuk membuka Mini App:",
-        reply_markup=builder
+        "Jelajahi file Windows langsung dari Telegram!"
     )
+    if not is_https:
+        msg += (
+            "\n\n⚠️ **WebApp belum aktif**\n"
+            "Mini App butuh HTTPS tunnel.\n"
+            "Setelah ngrok jalan, update `WEBAPP_URL` di `.env`"
+        )
+    
+    await message.answer(msg, reply_markup=builder)
 
 
 @dp.message(Command("help"))
@@ -443,19 +467,53 @@ async def cmd_status(message: types.Message):
     await message.answer(status_text)
 
 
+@dp.message()
+async def cmd_echo(message: types.Message):
+    """Respon ke pesan teks biasa"""
+    text = message.text or "[non-text]"
+    await message.answer(
+        f"👋 **Halo!**\n\n"
+        f"Pesan kamu: _{text}_\n\n"
+        f"Gunakan perintah:\n"
+        f"• /start — Buka File Explorer\n"
+        f"• /help — Bantuan\n"
+        f"• /status — Cek server"
+    )
+
+
 # ─── Main Entry ───────────────────────────────────────────────────────
 async def main():
-    # Set menu button
-    await bot.set_chat_menu_button(
-        menu_button=MenuButtonWebApp(
-            text="📁 File Explorer",
-            web_app=WebAppInfo(url=WEBAPP_URL)
-        )
-    )
-    logger.info("Bot started")
+    logger.info("Bot starting...")
 
-    # Jalankan HTTP server + bot polling bersamaan
+    # Jalankan HTTP server dulu
     await run_http_server()
+
+    # Set menu button (gagal diam-diam kalau URL masih HTTP)
+    try:
+        if WEBAPP_URL.startswith("https://"):
+            await bot.set_chat_menu_button(
+                menu_button=MenuButtonWebApp(
+                    text="📁 File Explorer",
+                    web_app=WebAppInfo(url=WEBAPP_URL)
+                )
+            )
+            logger.info("Menu button set")
+        else:
+            logger.warning(f"WebApp URL bukan HTTPS ({WEBAPP_URL}), skip menu button")
+            print(f"  ⚠️  Skipping menu button — WEBAPP_URL harus HTTPS")
+            print(f"  💡 Set API_BASE_URL ke URL publik (ngrok) di .env")
+    except Exception as e:
+        logger.warning(f"Menu button gagal: {e}")
+
+    logger.info("Bot started — polling...")
+    print(f"\n  ✅ ryu-vision bot siap!")
+    print(f"  🤖 Bot: @CodeActBot")
+    print(f"  🌐 API: http://{API_HOST}:{API_PORT}")
+    print(f"  🖥️  WebApp: {WEBAPP_URL}")
+    print(f"  💬 Mulai chat: https://t.me/CodeActBot")
+    print()
+
+    # Jalankan polling
     await dp.start_polling(bot)
 
 

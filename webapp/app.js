@@ -25,8 +25,8 @@ const state = {
 
 // ─── Config ──────────────────────────────────────────────────────────
 const CONFIG = {
-    // Ganti dengan URL bot API server yang berjalan
-    apiBase: window.API_BASE_URL || 'http://localhost:8765',
+    // API endpoint relatif — otomatis pake domain yang sama (ngrok)
+    apiBase: '',
 };
 
 // Override dari Telegram init data jika ada
