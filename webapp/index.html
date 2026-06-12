@@ -2,36 +2,40 @@
 <html lang="id">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ryu-vision</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>ryu-vision — File Explorer</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div id="app">
+        <!-- Header -->
         <header>
-            <h1>👁️ ryu-vision</h1>
-            <p class="subtitle">Telegram Mini App</p>
+            <div class="header-top">
+                <h1>📁 ryu-vision</h1>
+                <button id="btn-refresh" class="btn-icon" title="Refresh">🔄</button>
+            </div>
+            <p class="subtitle">File Explorer — Windows</p>
         </header>
 
-        <main>
-            <div id="status" class="card">
-                <p>Terhubung sebagai <strong id="user-name">—</strong></p>
-            </div>
+        <!-- Breadcrumb navigation -->
+        <nav id="breadcrumb" class="breadcrumb">
+            <span class="crumb-loading">Memuat...</span>
+        </nav>
 
-            <div class="card">
-                <button id="btn-action" class="btn-primary">📸 Ambil Gambar</button>
-            </div>
+        <!-- Toolbar -->
+        <div class="toolbar">
+            <button id="btn-drives" class="btn-tool">💾 Drives</button>
+            <span id="status-bar" class="status-bar"></span>
+        </div>
 
-            <div id="result" class="card hidden">
-                <h3>Hasil:</h3>
-                <pre id="result-text"></pre>
-            </div>
+        <!-- Main: file list -->
+        <main id="file-list" class="file-list">
+            <div class="loading">📂 Memuat direktori...</div>
         </main>
 
-        <footer>
-            <p>ryu-vision &copy; 2026</p>
-        </footer>
+        <!-- Error toast -->
+        <div id="toast" class="toast hidden"></div>
     </div>
     <script src="app.js"></script>
 </body>

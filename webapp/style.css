@@ -1,4 +1,5 @@
-* {
+/* ─── Reset & Variables ─────────────────────────────────────────── */
+*, *::before, *::after {
     margin: 0;
     padding: 0;
     box-sizing: border-box;
@@ -7,85 +8,284 @@
 :root {
     --bg: var(--tg-theme-bg-color, #1a1a2e);
     --text: var(--tg-theme-text-color, #e0e0e0);
-    --hint: var(--tg-theme-hint-color, #888);
+    --hint: var(--tg-theme-hint-color, #8e8e93);
+    --link: var(--tg-theme-link-color, #4a90d9);
     --btn: var(--tg-theme-button-color, #4a90d9);
     --btn-text: var(--tg-theme-button-text-color, #fff);
+    --section-bg: var(--tg-theme-section-bg-color, #222244);
+    --card-bg: rgba(255,255,255,0.05);
+    --border: rgba(255,255,255,0.08);
+    --spacing: 12px;
+    --radius: 10px;
+    --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 
 body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-family: var(--font);
     background: var(--bg);
     color: var(--text);
     min-height: 100vh;
-    padding: 16px;
+    overflow-x: hidden;
+    font-size: 14px;
 }
 
 #app {
-    max-width: 480px;
+    max-width: 520px;
     margin: 0 auto;
+    padding: 12px;
 }
 
+/* ─── Header ────────────────────────────────────────────────────── */
 header {
-    text-align: center;
-    padding: 24px 0;
+    padding: 8px 0 12px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 8px;
+}
+
+.header-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
 }
 
 header h1 {
-    font-size: 28px;
-    margin-bottom: 4px;
+    font-size: 20px;
+    font-weight: 700;
 }
 
 .subtitle {
     color: var(--hint);
-    font-size: 14px;
+    font-size: 12px;
+    margin-top: 2px;
 }
 
-.card {
-    background: rgba(255,255,255,0.05);
-    border-radius: 12px;
-    padding: 16px;
-    margin-bottom: 12px;
+.btn-icon {
+    background: none;
+    border: none;
+    font-size: 22px;
+    cursor: pointer;
+    padding: 6px;
+    border-radius: 8px;
+    transition: background 0.2s;
+    line-height: 1;
 }
 
-.btn-primary {
-    display: block;
-    width: 100%;
-    padding: 14px;
+.btn-icon:hover {
+    background: var(--card-bg);
+}
+
+/* ─── Breadcrumb ────────────────────────────────────────────────── */
+.breadcrumb {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    align-items: center;
+    padding: 8px 0;
+    font-size: 12px;
+    color: var(--hint);
+    overflow-x: auto;
+    white-space: nowrap;
+    scrollbar-width: none;
+}
+
+.breadcrumb::-webkit-scrollbar { display: none; }
+
+.crumb {
+    cursor: pointer;
+    padding: 3px 8px;
+    border-radius: 4px;
+    transition: background 0.15s;
+    color: var(--link);
+}
+
+.crumb:hover {
+    background: var(--card-bg);
+}
+
+.crumb-sep {
+    color: var(--hint);
+    font-size: 10px;
+}
+
+.crumb-current {
+    color: var(--text);
+    font-weight: 600;
+    cursor: default;
+}
+
+.crumb-loading {
+    color: var(--hint);
+    font-style: italic;
+}
+
+/* ─── Toolbar ───────────────────────────────────────────────────── */
+.toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 4px 0 8px;
+}
+
+.btn-tool {
+    padding: 6px 14px;
     background: var(--btn);
     color: var(--btn-text);
     border: none;
-    border-radius: 10px;
-    font-size: 16px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: opacity 0.2s;
-}
-
-.btn-primary:hover {
-    opacity: 0.9;
-}
-
-.btn-primary:active {
-    transform: scale(0.98);
-}
-
-.hidden {
-    display: none !important;
-}
-
-#result pre {
-    margin-top: 8px;
-    padding: 12px;
-    background: rgba(0,0,0,0.3);
     border-radius: 8px;
     font-size: 13px;
-    white-space: pre-wrap;
-    word-break: break-word;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.15s;
 }
 
-footer {
-    text-align: center;
-    padding: 24px 0;
-    font-size: 12px;
+.btn-tool:hover { opacity: 0.85; }
+.btn-tool:active { transform: scale(0.97); }
+
+.status-bar {
+    font-size: 11px;
     color: var(--hint);
+}
+
+/* ─── File List ─────────────────────────────────────────────────── */
+.file-list {
+    border-radius: var(--radius);
+    overflow: hidden;
+    min-height: 200px;
+}
+
+.loading {
+    text-align: center;
+    padding: 40px 0;
+    color: var(--hint);
+}
+
+.empty-state {
+    text-align: center;
+    padding: 40px 0;
+    color: var(--hint);
+    font-size: 16px;
+}
+
+/* ─── File Entry ────────────────────────────────────────────────── */
+.file-entry {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    cursor: pointer;
+    transition: background 0.12s;
+    border-bottom: 1px solid var(--border);
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.file-entry:last-child {
+    border-bottom: none;
+}
+
+.file-entry:hover {
+    background: var(--card-bg);
+}
+
+.file-entry:active {
+    background: rgba(255,255,255,0.08);
+}
+
+.file-entry.file-error {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.file-icon {
+    font-size: 24px;
+    width: 32px;
+    text-align: center;
+    flex-shrink: 0;
+}
+
+.file-icon.folder { font-size: 26px; }
+
+.file-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.file-name {
+    font-size: 14px;
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.file-meta {
+    font-size: 11px;
+    color: var(--hint);
+    margin-top: 2px;
+    display: flex;
+    gap: 8px;
+}
+
+.file-error-msg {
+    font-size: 11px;
+    color: #ff6b6b;
+    margin-top: 1px;
+}
+
+/* ─── Drive Selector ────────────────────────────────────────────── */
+.drive-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+    gap: 8px;
+    padding: 8px 0;
+}
+
+.drive-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 14px 8px;
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    cursor: pointer;
+    transition: all 0.12s;
+}
+
+.drive-btn:hover {
+    background: var(--btn);
+    color: var(--btn-text);
+}
+
+.drive-btn:active {
+    transform: scale(0.95);
+}
+
+.drive-icon { font-size: 28px; }
+.drive-label { font-size: 13px; font-weight: 600; }
+
+/* ─── Toast ──────────────────────────────────────────────────────── */
+.toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0,0,0,0.85);
+    color: #fff;
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-size: 13px;
+    z-index: 100;
+    max-width: 90%;
+    text-align: center;
+    animation: toast-in 0.25s ease;
+}
+
+.toast.hidden { display: none; }
+
+@keyframes toast-in {
+    from { opacity: 0; transform: translateX(-50%) translateY(20px); }
+    to { opacity: 1; transform: translateX(-50%) translateY(0); }
 }
