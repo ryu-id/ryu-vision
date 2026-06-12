@@ -3,6 +3,7 @@ ryu-vision — Telegram Mini App File Explorer
 
 Bot Telegram + HTTP server untuk akses filesystem Windows.
 WebApp (Mini App) ngobrol sama bot via API HTTP.
+Fitur: File Explorer, Download, Upload, System Monitor.
 """
 
 import os
@@ -12,13 +13,19 @@ import hashlib
 import stat as stat_module
 import time
 import logging
+import platform
 from pathlib import Path
 from urllib.parse import unquote, quote
 from datetime import datetime
 
-from aiogram import Bot, Dispatcher, types
+import psutil
+
+from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
-from aiogram.types import WebAppInfo, MenuButtonWebApp, InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import (
+    WebAppInfo, MenuButtonWebApp, InlineKeyboardMarkup,
+    InlineKeyboardButton, FSInputFile
+)
 from dotenv import load_dotenv
 
 import aiohttp
@@ -33,6 +40,7 @@ API_PORT = int(os.getenv("API_PORT", "8765"))
 API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8765")
 WEBAPP_URL = os.getenv("WEBAPP_URL", f"{API_BASE_URL}/webapp")
 ALLOWED_DRIVES = os.getenv("ALLOWED_DRIVES", "C:,D:,E:,F:").split(",")
+UPLOAD_DIR = os.getenv("UPLOAD_DIR", str(Path.home() / "Downloads" / "ryu-uploads"))
 
 # ─── Bot Setup ────────────────────────────────────────────────────────
 logging.basicConfig(level=logging.INFO)
@@ -85,11 +93,9 @@ def is_path_safe(path: str) -> bool:
     """Cegah path traversal dan batasi ke drive yang diizinkan"""
     try:
         p = Path(path).resolve()
-        # Cek path traversal
         if not p.exists():
             return False
-        # Cek drive
-        drive = p.drive  # "C:", "D:", etc
+        drive = p.drive
         if drive and drive not in ALLOWED_DRIVES:
             return False
         return True
@@ -141,7 +147,6 @@ def list_directory(path: str) -> dict:
             except OSError as e:
                 errors.append(f"{entry.name}: {e}")
 
-        # Dapatkan parent
         parent = str(p.parent) if p.parent != p else ""
 
         return {
@@ -163,7 +168,7 @@ def list_directory(path: str) -> dict:
 def get_drives() -> list:
     """Dapatkan daftar drive Windows"""
     drives = []
-    if os.name == "nt":  # Windows
+    if os.name == "nt":
         import subprocess
         try:
             result = subprocess.run(["wmic", "logicaldisk", "get", "name"],
@@ -173,13 +178,11 @@ def get_drives() -> list:
                 if drive:
                     drives.append(drive)
         except Exception:
-            # Fallback: cek drive A-Z
             for letter in "CDEFGHIJKLMNOPQRSTUVWXYZ":
                 drive = f"{letter}:\\"
                 if os.path.exists(drive):
                     drives.append(drive)
     else:
-        # Linux/Mac — return root
         drives.append("/")
     return drives
 
@@ -199,7 +202,6 @@ def get_file_content(path: str, max_size: int = 1_000_000) -> dict:
                 "max_size": max_size
             }
 
-        # Deteksi apakah binary
         try:
             content = p.read_text(encoding="utf-8", errors="strict")
             return {
@@ -209,7 +211,6 @@ def get_file_content(path: str, max_size: int = 1_000_000) -> dict:
                 "encoding": "utf-8"
             }
         except (UnicodeDecodeError, UnicodeEncodeError):
-            # Binary — return base64
             import base64
             with open(p, "rb") as f:
                 raw = f.read()
@@ -226,6 +227,90 @@ def get_file_content(path: str, max_size: int = 1_000_000) -> dict:
         return {"error": str(e)}
 
 
+# ─── System Monitor ───────────────────────────────────────────────────
+def get_disk_info() -> list:
+    """Info penggunaan semua drive"""
+    disks = []
+    for part in psutil.disk_partitions():
+        try:
+            usage = psutil.disk_usage(part.mountpoint)
+            disks.append({
+                "drive": part.mountpoint,
+                "fstype": part.fstype,
+                "total": usage.total,
+                "used": usage.used,
+                "free": usage.free,
+                "percent": usage.percent,
+                "total_fmt": format_size(usage.total),
+                "used_fmt": format_size(usage.used),
+                "free_fmt": format_size(usage.free),
+            })
+        except PermissionError:
+            disks.append({
+                "drive": part.mountpoint,
+                "fstype": part.fstype,
+                "error": "Permission denied"
+            })
+    return disks
+
+
+def get_cpu_info() -> dict:
+    """Info CPU dan RAM"""
+    cpu_percent = psutil.cpu_percent(interval=0.5)
+    cpu_count = psutil.cpu_count()
+    cpu_freq = psutil.cpu_freq()
+    mem = psutil.virtual_memory()
+    swap = psutil.swap_memory()
+
+    return {
+        "cpu": {
+            "percent": cpu_percent,
+            "count": cpu_count,
+            "freq_mhz": cpu_freq.current if cpu_freq else 0,
+        },
+        "ram": {
+            "total": mem.total,
+            "available": mem.available,
+            "used": mem.used,
+            "percent": mem.percent,
+            "total_fmt": format_size(mem.total),
+            "used_fmt": format_size(mem.used),
+            "free_fmt": format_size(mem.available),
+        },
+        "swap": {
+            "total": swap.total,
+            "used": swap.used,
+            "percent": swap.percent,
+            "total_fmt": format_size(swap.total),
+            "used_fmt": format_size(swap.used),
+        },
+        "hostname": platform.node(),
+        "os": f"{platform.system()} {platform.release()}",
+        "uptime_seconds": int(time.time() - psutil.boot_time()),
+    }
+
+
+def get_process_list(top_n: int = 15) -> list:
+    """Daftar proses berjalan (sorted by CPU)"""
+    processes = []
+    for proc in psutil.process_iter(["pid", "name", "cpu_percent", "memory_percent", "status"]):
+        try:
+            info = proc.info
+            processes.append({
+                "pid": info["pid"],
+                "name": info["name"],
+                "cpu": info["cpu_percent"] or 0,
+                "mem": info["memory_percent"] or 0,
+                "status": info["status"],
+            })
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            continue
+
+    # Sort by CPU descending, take top N
+    processes.sort(key=lambda p: p["cpu"], reverse=True)
+    return processes[:top_n]
+
+
 # ─── HTTP Server ──────────────────────────────────────────────────────
 async def handle_ls(request: web.Request) -> web.Response:
     """POST /api/ls — list directory"""
@@ -237,7 +322,6 @@ async def handle_ls(request: web.Request) -> web.Response:
     path = data.get("path", "C:\\")
     init_data = data.get("init_data", "")
 
-    # Validasi
     if not validate_init_data(init_data):
         return web.json_response({"error": "Unauthorized"}, status=401)
 
@@ -301,16 +385,28 @@ async def handle_drives(request: web.Request) -> web.Response:
         return web.json_response({"error": "Unauthorized"}, status=401)
 
     drives = get_drives()
+    # Juga return info disk usage
+    disk_info = get_disk_info()
+    disk_map = {}
+    for d in disk_info:
+        disk_map[d["drive"]] = d
+
     results = []
     for d in drives:
         try:
-            st = os.statvfs(d) if hasattr(os, 'statvfs') else None
             info = list_directory(d)
+            disk = disk_map.get(d.rstrip("\\"), {})
             results.append({
                 "drive": d,
                 "label": d.rstrip(":\\/"),
                 "items": info.get("items", []),
                 "item_count": info.get("item_count", 0),
+                "disk": {
+                    "total_fmt": disk.get("total_fmt", "?"),
+                    "used_fmt": disk.get("used_fmt", "?"),
+                    "free_fmt": disk.get("free_fmt", "?"),
+                    "percent": disk.get("percent", 0),
+                } if disk else None,
             })
         except Exception as e:
             results.append({
@@ -320,6 +416,27 @@ async def handle_drives(request: web.Request) -> web.Response:
             })
 
     return web.json_response({"drives": results})
+
+
+async def handle_download(request: web.Request) -> web.Response:
+    """GET /api/download — download file sebagai attachment"""
+    path = request.query.get("path", "")
+    init_data = request.query.get("init_data", "")
+
+    if not validate_init_data(init_data):
+        return web.json_response({"error": "Unauthorized"}, status=401)
+
+    if not path or not is_path_safe(path):
+        return web.json_response({"error": "Access denied"}, status=403)
+
+    p = Path(path).resolve()
+    if not p.is_file():
+        return web.json_response({"error": "Not a file"}, status=404)
+
+    try:
+        return web.FileResponse(p)
+    except Exception as e:
+        return web.json_response({"error": str(e)}, status=500)
 
 
 async def handle_health(request: web.Request) -> web.Response:
@@ -362,6 +479,41 @@ async def handle_webapp_static(request: web.Request) -> web.Response:
     return web.Response(text="Not found", status=404)
 
 
+# ─── Favicon ──────────────────────────────────────────────────────────
+async def handle_favicon(request: web.Request) -> web.Response:
+    """GET /favicon.ico — serve favicon"""
+    favicon_path = Path(__file__).parent.parent / "webapp" / "favicon.ico"
+    if favicon_path.exists():
+        return web.FileResponse(favicon_path)
+    return web.Response(status=204)  # No content
+
+
+
+async def handle_disk_api(request: web.Request) -> web.Response:
+    """GET /api/disk -- daftar info drive"""
+    init_data = request.query.get("init_data", "")
+    if not validate_init_data(init_data):
+        return web.json_response({"error": "Unauthorized"}, status=401)
+    return web.json_response({"disks": get_disk_info()})
+
+
+async def handle_cpu_api(request: web.Request) -> web.Response:
+    """GET /api/cpu -- cpu, ram, uptime"""
+    init_data = request.query.get("init_data", "")
+    if not validate_init_data(init_data):
+        return web.json_response({"error": "Unauthorized"}, status=401)
+    return web.json_response(get_cpu_info())
+
+
+async def handle_proc_api(request: web.Request) -> web.Response:
+    """GET /api/proc -- daftar proses"""
+    init_data = request.query.get("init_data", "")
+    if not validate_init_data(init_data):
+        return web.json_response({"error": "Unauthorized"}, status=401)
+    top_n = int(request.query.get("top", "15"))
+    return web.json_response({"processes": get_process_list(top_n)})
+
+
 async def run_http_server():
     """Jalankan HTTP server"""
     app = web.Application()
@@ -369,30 +521,36 @@ async def run_http_server():
     # CORS middleware
     @web.middleware
     async def cors_middleware(request, handler):
+        if request.method == "OPTIONS":
+            return web.Response(headers={
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+                "Access-Control-Allow-Headers": "Content-Type",
+            })
         response = await handler(request)
         response.headers["Access-Control-Allow-Origin"] = "*"
         response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
         response.headers["Access-Control-Allow-Headers"] = "Content-Type"
         return response
 
-    # OPTIONS handler
-    async def handle_options(request):
-        return web.Response(headers={
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-            "Access-Control-Allow-Headers": "Content-Type",
-        })
-
     app.middlewares.append(cors_middleware)
 
+    # API
     app.router.add_post("/api/ls", handle_ls)
     app.router.add_post("/api/stat", handle_stat)
     app.router.add_post("/api/read", handle_read)
     app.router.add_post("/api/drives", handle_drives)
+    app.router.add_get("/api/download", handle_download)
+    # System Monitor API
+    app.router.add_get("/api/disk", handle_disk_api)
+    app.router.add_get("/api/cpu", handle_cpu_api)
+    app.router.add_get("/api/proc", handle_proc_api)
+
+    # Web
     app.router.add_get("/health", handle_health)
     app.router.add_get("/webapp", handle_webapp)
     app.router.add_get("/webapp/{filename}", handle_webapp_static)
-    app.router.add_route("OPTIONS", "/api/{tail:.*}", handle_options)
+    app.router.add_get("/favicon.ico", handle_favicon)
 
     runner = web.AppRunner(app)
     await runner.setup()
@@ -401,6 +559,7 @@ async def run_http_server():
     logger.info(f"HTTP server running on http://{API_HOST}:{API_PORT}")
     print(f"  🌐 API:       http://{API_HOST}:{API_PORT}")
     print(f"  🖥️  WebApp:  {WEBAPP_URL}")
+    print(f"  💾 Upload:    {UPLOAD_DIR}")
 
 
 # ─── Bot Handlers ─────────────────────────────────────────────────────
@@ -408,65 +567,266 @@ async def run_http_server():
 async def cmd_start(message: types.Message):
     """Welcome + tombol buka File Explorer"""
     is_https = WEBAPP_URL.startswith("https://")
-    
+
+    buttons = []
     if is_https:
-        builder = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(
-                text="📁 Buka File Explorer",
-                web_app=WebAppInfo(url=WEBAPP_URL)
-            )]
-        ])
-    else:
-        builder = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(
-                text="🔧 Setup Tunnel Dulu",
-                url="https://ngrok.com/download"
-            )]
-        ])
-    
+        buttons.append([InlineKeyboardButton(
+            text="📁 Buka File Explorer",
+            web_app=WebAppInfo(url=WEBAPP_URL)
+        )])
+
+    buttons.append([InlineKeyboardButton(text="💻 /cpu — CPU & RAM", callback_data="info_cpu")])
+    buttons.append([InlineKeyboardButton(text="💾 /disk — Storage", callback_data="info_disk")])
+
+    builder = InlineKeyboardMarkup(inline_keyboard=buttons)
+
     msg = (
-        "👁️ **ryu-vision — File Explorer**\n\n"
-        "Jelajahi file Windows langsung dari Telegram!"
+        "👁️ **ryu-vision v2 — Remote File Explorer & Monitor**\n\n"
+        "Jelajahi file Windows, download, upload, monitor PC langsung dari Telegram!\n\n"
+        "**📁 File Explorer** — browse folder, lihat file info\n"
+        "**💾 System Monitor** — /disk, /cpu, /proc\n"
+        "**📥 Download** — klik file di Mini App\n"
+        "**📤 Upload** — kirim file ke bot"
     )
-    if not is_https:
-        msg += (
-            "\n\n⚠️ **WebApp belum aktif**\n"
-            "Mini App butuh HTTPS tunnel.\n"
-            "Setelah ngrok jalan, update `WEBAPP_URL` di `.env`"
-        )
-    
+
     await message.answer(msg, reply_markup=builder)
 
 
 @dp.message(Command("help"))
 async def cmd_help(message: types.Message):
     await message.answer(
-        "**📁 ryu-vision File Explorer**\n\n"
-        "**Perintah:**\n"
-        "/start — Buka File Explorer\n"
-        "/help — Bantuan ini\n"
-        "/status — Cek status server\n\n"
-        "**Fitur:**\n"
-        "• Navigasi folder Windows\n"
-        "• Lihat file info (size, tanggal)\n"
-        "• Baca file teks\n"
-        "• Tampilkan drive C:, D:, E:, dll"
+        "**📁 ryu-vision v2 — Perintah Tersedia**\n\n"
+        "**🔍 File Explorer**\n"
+        "/start — Buka Mini App File Explorer\n\n"
+        "**🖥️ System Monitor**\n"
+        "/disk — Info penggunaan semua drive\n"
+        "/cpu — CPU, RAM, dan uptime\n"
+        "/proc — Daftar proses (top 15 by CPU)\n\n"
+        "**📥 Download**\n"
+        "Buka Mini App → klik file → bot kirim file ke chat ini\n\n"
+        "**📤 Upload**\n"
+        "Kirim file ke bot → auto-simpan ke `Downloads/ryu-uploads/`\n\n"
+        "**🔧 Lainnya**\n"
+        "/status — Cek status server & koneksi\n"
+        "/help — Bantuan ini"
     )
 
 
 @dp.message(Command("status"))
 async def cmd_status(message: types.Message):
     drives = get_drives()
+    disk_info = get_disk_info()
+    disk_lines = []
+    for d in disk_info:
+        if "error" in d:
+            disk_lines.append(f"  {d['drive']}: ❌ {d['error']}")
+        else:
+            bar = "█" * int(d["percent"] / 10) + "░" * (10 - int(d["percent"] / 10))
+            disk_lines.append(f"  {d['drive']}: {d['used_fmt']}/{d['total_fmt']} ({d['percent']}%)")
+            disk_lines.append(f"             {bar}")
+
     status_text = (
-        "**🟢 ryu-vision Status**\n\n"
-        f"**Platform:** {os.name}\n"
+        "**🟢 ryu-vision v2 — Status**\n\n"
+        f"**Platform:** {platform.system()} {platform.release()}\n"
+        f"**Hostname:** {platform.node()}\n"
         f"**Drives:** {', '.join(drives)}\n"
+        f"**Upload:** `{UPLOAD_DIR}`\n"
         f"**API:** {API_BASE_URL}\n"
-        f"**WebApp:** {WEBAPP_URL}"
+        f"**WebApp:** {WEBAPP_URL}\n\n"
+        "**💾 Disk Usage:**\n"
+        + "\n".join(disk_lines)
     )
     await message.answer(status_text)
 
 
+@dp.message(Command("disk"))
+async def cmd_disk(message: types.Message):
+    """Info penggunaan drive"""
+    disk_info = get_disk_info()
+    lines = ["**💾 Disk Usage**\n"]
+    for d in disk_info:
+        if "error" in d:
+            lines.append(f"❌ **{d['drive']}**: {d['error']}")
+        else:
+            bar_len = 14
+            filled = int(d["percent"] / (100 / bar_len))
+            bar = "█" * filled + "░" * (bar_len - filled)
+            lines.append(
+                f"**{d['drive']}** ({d['fstype']})\n"
+                f"  {bar}  `{d['percent']:.0f}%`\n"
+                f"  Total: {d['total_fmt']}\n"
+                f"  Used:  {d['used_fmt']}\n"
+                f"  Free:  {d['free_fmt']}\n"
+            )
+
+    await message.answer("\n".join(lines))
+
+
+@dp.message(Command("cpu"))
+async def cmd_cpu(message: types.Message):
+    """Info CPU, RAM, uptime"""
+    info = get_cpu_info()
+    cpu = info["cpu"]
+    ram = info["ram"]
+    swap = info["swap"]
+
+    # CPU bar
+    cpu_bar_len = 14
+    cpu_filled = int(cpu["percent"] / (100 / cpu_bar_len))
+    cpu_bar = "█" * cpu_filled + "░" * (cpu_bar_len - cpu_filled)
+
+    # RAM bar
+    ram_filled = int(ram["percent"] / (100 / cpu_bar_len))
+    ram_bar = "█" * ram_filled + "░" * (cpu_bar_len - ram_filled)
+
+    # Uptime formatting
+    uptime = info.get("uptime_seconds", 0)
+    days, rem = divmod(uptime, 86400)
+    hours, rem = divmod(rem, 3600)
+    minutes, _ = divmod(rem, 60)
+    uptime_str = f"{int(days)}d {int(hours)}h {int(minutes)}m"
+
+    msg = (
+        "**🖥️ System Monitor**\n"
+        f"Host: `{info['hostname']}`\n"
+        f"OS: {info['os']}\n"
+        f"Uptime: {uptime_str}\n\n"
+        f"**CPU** ({cpu['count']} cores, {cpu['freq_mhz']:.0f} MHz)\n"
+        f"  {cpu_bar}  `{cpu['percent']:.1f}%`\n\n"
+        f"**RAM**\n"
+        f"  {ram_bar}  `{ram['percent']:.1f}%`\n"
+        f"  Used: {ram['used_fmt']} / {ram['total_fmt']}\n"
+        f"  Free: {ram['free_fmt']}\n"
+    )
+
+    if swap["total"] > 0:
+        swap_bar = "█" * int(swap["percent"] / (100 / cpu_bar_len)) + "░" * (cpu_bar_len - int(swap["percent"] / (100 / cpu_bar_len)))
+        msg += (
+            f"\n**Swap**\n"
+            f"  {swap_bar}  `{swap['percent']:.1f}%`\n"
+            f"  Used: {swap['used_fmt']} / {swap['total_fmt']}\n"
+        )
+
+    await message.answer(msg)
+
+
+@dp.message(Command("proc"))
+async def cmd_proc(message: types.Message):
+    """Daftar proses berjalan"""
+    processes = get_process_list(15)
+    if not processes:
+        await message.answer("❌ Tidak bisa mendapatkan daftar proses.")
+        return
+
+    lines = ["**⚙️ Top Processes (by CPU)**\n"]
+    for i, p in enumerate(processes, 1):
+        cpu_display = f"{p['cpu']:.1f}%" if p['cpu'] else "0%"
+        mem_display = f"{p['mem']:.1f}%" if p['mem'] else "0%"
+        lines.append(f"`{p['pid']:>6}` {cpu_display:>6} / {mem_display:>6} — {p['name'][:40]}")
+
+    # Split if too long (Telegram 4096 limit)
+    msg = "\n".join(lines)
+    if len(msg) > 4000:
+        # Send as file
+        with open(Path.home() / "ryu-processes.txt", "w") as f:
+            f.write(msg.replace("**", "").replace("`", ""))
+        await message.answer_document(
+            FSInputFile(Path.home() / "ryu-processes.txt"),
+            caption="📋 Daftar proses (top 15 by CPU)"
+        )
+        os.unlink(Path.home() / "ryu-processes.txt")
+    else:
+        await message.answer(msg)
+
+
+# ─── WebApp Data Handler (Download dari Mini App) ─────────────────────
+@dp.message(F.web_app_data)
+async def webapp_data_handler(message: types.Message):
+    """Terima data dari WebApp (download request)"""
+    try:
+        data = json.loads(message.web_app_data.data)
+        action = data.get("action", "")
+        path = data.get("path", "")
+
+        logger.info(f"WebApp data: action={action}, path={path}")
+
+        if action == "download":
+            if not path or not is_path_safe(path):
+                await message.answer("❌ Akses ditolak: path tidak valid.")
+                return
+
+            p = Path(path).resolve()
+            if not p.is_file():
+                await message.answer("❌ File tidak ditemukan.")
+                return
+
+            size = p.stat().st_size
+            # Telegram bot file size limit: 50MB
+            if size > 50 * 1024 * 1024:
+                await message.answer(f"⚠️ File terlalu besar untuk dikirim via Telegram ({format_size(size)}). Maks 50 MB.")
+                return
+
+            try:
+                await message.answer_document(
+                    FSInputFile(str(p)),
+                    caption=f"📥 **{p.name}**\nSize: {format_size(size)}"
+                )
+            except Exception as e:
+                await message.answer(f"❌ Gagal mengirim file: {e}")
+
+        else:
+            await message.answer(f"⚠️ Perintah tidak dikenal: {action}")
+
+    except json.JSONDecodeError:
+        await message.answer("❌ Data WebApp tidak valid.")
+    except Exception as e:
+        logger.error(f"WebApp data handler error: {e}")
+        await message.answer(f"❌ Error: {e}")
+
+
+# ─── Upload Handler ───────────────────────────────────────────────────
+@dp.message(F.document)
+async def handle_upload(message: types.Message):
+    """Terima file dari user — simpan ke UPLOAD_DIR"""
+    doc = message.document
+    file_name = doc.file_name or f"file_{doc.file_id}"
+    file_size = doc.file_size or 0
+
+    # Status
+    status_msg = await message.answer(f"📤 **Mengupload...** `{file_name}` ({format_size(file_size)})")
+
+    try:
+        # Pastikan folder upload ada
+        upload_path = Path(UPLOAD_DIR)
+        upload_path.mkdir(parents=True, exist_ok=True)
+
+        # Download file dari Telegram
+        file_info = await bot.get_file(doc.file_id)
+        dest = upload_path / file_name
+
+        # Hindari overwrite
+        counter = 1
+        while dest.exists():
+            stem = dest.stem
+            suffix = dest.suffix
+            dest = upload_path / f"{stem} ({counter}){suffix}"
+            counter += 1
+
+        await bot.download_file(file_info.file_path, destination=str(dest))
+
+        real_size = dest.stat().st_size
+        await status_msg.edit_text(
+            f"✅ **File tersimpan!**\n\n"
+            f"Nama: `{file_name}`\n"
+            f"Size: {format_size(real_size)}\n"
+            f"Lokasi: `{dest}`\n"
+        )
+
+    except Exception as e:
+        await status_msg.edit_text(f"❌ **Upload gagal:** {e}")
+
+
+# ─── Echo / Fallback ──────────────────────────────────────────────────
 @dp.message()
 async def cmd_echo(message: types.Message):
     """Respon ke pesan teks biasa"""
@@ -474,10 +834,14 @@ async def cmd_echo(message: types.Message):
     await message.answer(
         f"👋 **Halo!**\n\n"
         f"Pesan kamu: _{text}_\n\n"
-        f"Gunakan perintah:\n"
+        f"**Perintah tersedia:**\n"
         f"• /start — Buka File Explorer\n"
-        f"• /help — Bantuan\n"
-        f"• /status — Cek server"
+        f"• /disk — Info drive\n"
+        f"• /cpu — CPU & RAM\n"
+        f"• /proc — Daftar proses\n"
+        f"• /help — Semua perintah\n"
+        f"• /status — Status server\n\n"
+        f"📤 Atau kirim file untuk upload ke PC!"
     )
 
 
@@ -485,10 +849,13 @@ async def cmd_echo(message: types.Message):
 async def main():
     logger.info("Bot starting...")
 
+    # Buat folder upload
+    Path(UPLOAD_DIR).mkdir(parents=True, exist_ok=True)
+
     # Jalankan HTTP server dulu
     await run_http_server()
 
-    # Set menu button (gagal diam-diam kalau URL masih HTTP)
+    # Set menu button
     try:
         if WEBAPP_URL.startswith("https://"):
             await bot.set_chat_menu_button(
@@ -506,11 +873,11 @@ async def main():
         logger.warning(f"Menu button gagal: {e}")
 
     logger.info("Bot started — polling...")
-    print(f"\n  ✅ ryu-vision bot siap!")
-    print(f"  🤖 Bot: @CodeActBot")
+    print(f"\n  ✅ ryu-vision v2 siap!")
+    print(f"  🤖 Bot @RyuVisionBot")
     print(f"  🌐 API: http://{API_HOST}:{API_PORT}")
     print(f"  🖥️  WebApp: {WEBAPP_URL}")
-    print(f"  💬 Mulai chat: https://t.me/CodeActBot")
+    print(f"  💾 Upload:  {UPLOAD_DIR}")
     print()
 
     # Jalankan polling
@@ -519,7 +886,4 @@ async def main():
 
 if __name__ == "__main__":
     import asyncio
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        logger.info("Shutting down...")
+    asyncio.run(main())
